@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
@@ -19,16 +18,17 @@ import (
 )
 
 func main() {
-	// Load environment variables from .env file
-	err := godotenv.Load()
-	if err != nil {
-		fmt.Println("Warning: No .env file found")
-	}
-
 	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	// Load environment variables from YAML config
+	//
+	err = godotenv.Load(cfg.YAML.Environment.File)
+	if err != nil {
+		log.Fatalf("Failed to load environment variables from YAML config: %v", err)
 	}
 
 	// Log whether registration is enabled based on YAML config

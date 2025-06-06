@@ -12,6 +12,9 @@ import (
 
 // YAMLConfig holds the configuration loaded from open-registry.yaml
 type YAMLConfig struct {
+	Environment struct {
+		File string `yaml:"file"`
+	} `yaml:"environment"`
 	Authentication struct {
 		Register struct {
 			Enabled bool `yaml:"enabled"`

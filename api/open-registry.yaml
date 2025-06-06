@@ -1,3 +1,10 @@
+# Environment settings
+#
+environment:
+  # Absolute path to the .env used by the Open Registry API.
+  #
+  file: /orrery/learning/open-registry/api/.env
+
 # Authentication Settings
 #
 authentication:
