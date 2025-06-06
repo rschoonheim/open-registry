@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { useForm } from 'vee-validate'
+import * as yup from 'yup'
 import type { LoginCredentials } from '~/types/auth'
+import { useFeatures } from "~/composables/useFeatures"
 
 // Set the layout for this page
 definePageMeta({
@@ -8,58 +10,74 @@ definePageMeta({
 })
 
 // Use our authentication composable
-const { login, isLoading, error } = useAuth()
+const { login, isLoading, error: authError } = useAuth()
+const { features } = useFeatures()
 const router = useRouter()
 
-// Form state
-const credentials = reactive<LoginCredentials>({
-  username: '',
-  password: ''
+// Define validation schema with Yup
+const validationSchema = yup.object({
+  username: yup.string().required('Username is required'),
+  password: yup.string().required('Password is required').min(6, 'Password must be at least 6 characters')
 })
 
-// Form submission
-const handleLogin = async () => {
+// Initialize form with VeeValidate
+const { handleSubmit, errors, resetForm, defineField } = useForm({
+  validationSchema
+})
+
+// Define fields with defineField
+const [username, usernameAttrs] = defineField('username', '')
+const [password, passwordAttrs] = defineField('password', '')
+
+// Form submission handler
+const onSubmit = handleSubmit(async (values) => {
+  const credentials: LoginCredentials = {
+    username: values.username,
+    password: values.password
+  }
+
   const result = await login(credentials)
   if (result.success) {
     // Redirect to dashboard after successful login
     router.push('/')
   }
-}
+})
 </script>
 
 <template>
   <div>
-    <form @submit.prevent="handleLogin" class="mt-8 space-y-6">
-      <div class="rounded-md shadow-sm -space-y-px">
+    <form @submit.prevent="onSubmit" class="mt-8 space-y-6">
+      <div class="rounded-md shadow-sm space-y-4">
         <div>
-          <label for="username" class="sr-only">Username</label>
+          <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
           <input
             id="username"
-            name="username"
+            v-model="username"
+            v-bind="usernameAttrs"
             type="text"
-            required
-            v-model="credentials.username"
-            class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+            class="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
             placeholder="Username"
           />
+          <p v-if="errors.username" class="mt-1 text-sm text-red-600">{{ errors.username }}</p>
         </div>
+
         <div>
-          <label for="password" class="sr-only">Password</label>
+          <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
           <input
             id="password"
-            name="password"
+            v-model="password"
+            v-bind="passwordAttrs"
             type="password"
-            required
-            v-model="credentials.password"
-            class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+            class="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
             placeholder="Password"
           />
+          <p v-if="errors.password" class="mt-1 text-sm text-red-600">{{ errors.password }}</p>
         </div>
       </div>
 
       <!-- Display error message if login fails -->
-      <div v-if="error" class="text-sm text-red-600">
-        {{ error }}
+      <div v-if="authError" class="text-sm text-red-600 mt-2">
+        {{ authError }}
       </div>
 
       <div>
@@ -76,6 +94,14 @@ const handleLogin = async () => {
             Signing in...
           </span>
           <span v-else>Sign in</span>
+        </button>
+
+        <button
+          v-if="features.authentication.register"
+          @click.prevent="router.push('/auth/register')"
+          class="mt-2 w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-indigo-600 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          Create an account
         </button>
       </div>
     </form>

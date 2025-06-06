@@ -68,11 +68,15 @@ func main() {
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(cfg.Env.JWTSecret)
+	configHandler := handlers.NewConfigHandler(cfg)
 
 	// Public routes
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Welcome to Open Registry API")
 	})
+
+	// Features endpoint - publicly accessible
+	app.Get("/api/features", configHandler.GetFeatures)
 
 	// Auth routes
 	auth := app.Group("/auth")
