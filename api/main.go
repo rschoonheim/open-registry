@@ -1,21 +1,160 @@
 package main
 
 import (
-  "fmt"
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	jwtware "github.com/gofiber/jwt/v3"
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/joho/godotenv"
 )
 
-//TIP <p>To run your code, right-click the code and select <b>Run</b>.</p> <p>Alternatively, click
-// the <icon src="AllIcons.Actions.Execute"/> icon in the gutter and select the <b>Run</b> menu item from here.</p>
+// User represents the structure of our user
+type User struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// Set of demo users
+var users = map[string]string{
+	"admin": "admin123",
+	"user":  "user123",
+}
 
 func main() {
-  //TIP <p>Press <shortcut actionId="ShowIntentionActions"/> when your caret is at the underlined text
-  // to see how GoLand suggests fixing the warning.</p><p>Alternatively, if available, click the lightbulb to view possible fixes.</p>
-  s := "gopher"
-  fmt.Println("Hello and welcome, %s!", s)
+	// Load environment variables
+	err := godotenv.Load()
+	if err != nil {
+		fmt.Println("Warning: No .env file found")
+	}
 
-  for i := 1; i <= 5; i++ {
-	//TIP <p>To start your debugging session, right-click your code in the editor and select the Debug option.</p> <p>We have set one <icon src="AllIcons.Debugger.Db_set_breakpoint"/> breakpoint
-	// for you, but you can always add more by pressing <shortcut actionId="ToggleLineBreakpoint"/>.</p>
-	fmt.Println("i =", 100/i)
-  }
+	// Set JWT secret from environment variables or use default
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "your-256-bit-secret"
+		fmt.Println("Warning: Using default JWT secret. Set JWT_SECRET environment variable in production.")
+	}
+
+	// Initialize Fiber app
+	app := fiber.New()
+
+	// Middleware
+	app.Use(logger.New())
+	app.Use(cors.New())
+
+	// Public routes
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("Welcome to Open Registry API")
+	})
+
+	// Auth routes
+	auth := app.Group("/auth")
+	auth.Post("/login", login(jwtSecret))
+
+	// API routes (protected)
+	api := app.Group("/api")
+	api.Use(jwtware.New(jwtware.Config{
+		SigningKey: []byte(jwtSecret),
+	}))
+
+	// Protected routes
+	api.Get("/", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"message": "Welcome to protected API route",
+		})
+	})
+
+	api.Get("/user", func(c *fiber.Ctx) error {
+		user := c.Locals("user").(*jwt.Token)
+		claims := user.Claims.(jwt.MapClaims)
+		username := claims["username"].(string)
+
+		return c.JSON(fiber.Map{
+			"username": username,
+			"admin":    claims["admin"],
+		})
+	})
+
+	// Example packages route
+	api.Get("/packages", getPackages)
+
+	// Listen on port from env or default to 3000
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+
+	log.Fatal(app.Listen(":" + port))
+}
+
+// Login handler
+func login(jwtSecret string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		user := new(User)
+
+		if err := c.BodyParser(user); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Cannot parse JSON",
+			})
+		}
+
+		// Check if user exists and password is correct
+		password, exists := users[user.Username]
+		if !exists || password != user.Password {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Invalid credentials",
+			})
+		}
+
+		// Create the Claims
+		claims := jwt.MapClaims{
+			"username": user.Username,
+			"admin":    user.Username == "admin",
+			"exp":      time.Now().Add(time.Hour * 72).Unix(),
+		}
+
+		// Create token
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+		// Generate encoded token
+		t, err := token.SignedString([]byte(jwtSecret))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to generate token",
+			})
+		}
+
+		return c.JSON(fiber.Map{
+			"token": t,
+			"user": fiber.Map{
+				"username": user.Username,
+				"admin":    user.Username == "admin",
+			},
+		})
+	}
+}
+
+// Example of a handler for getting packages
+func getPackages(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{
+		"packages": []fiber.Map{
+			{
+				"id":          "1",
+				"name":        "example-package",
+				"version":     "1.0.0",
+				"description": "An example package",
+			},
+			{
+				"id":          "2",
+				"name":        "another-package",
+				"version":     "2.1.0",
+				"description": "Another example package",
+			},
+		},
+	})
 }
