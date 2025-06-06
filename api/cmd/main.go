@@ -26,7 +26,17 @@ func main() {
 	}
 
 	// Load configuration
-	cfg := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	// Log whether registration is enabled based on YAML config
+	if cfg.YAML.Authentication.Register.Enabled {
+		log.Println("User registration is enabled")
+	} else {
+		log.Println("User registration is disabled")
+	}
 
 	// Connect to the database
 	err = database.Connect(cfg.GetDSN())
@@ -57,7 +67,7 @@ func main() {
 	app.Use(cors.New())
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(cfg.JWTSecret)
+	authHandler := handlers.NewAuthHandler(cfg.Env.JWTSecret)
 
 	// Public routes
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -67,12 +77,16 @@ func main() {
 	// Auth routes
 	auth := app.Group("/auth")
 	auth.Post("/login", authHandler.Login)
-	auth.Post("/register", authHandler.Register)
+
+	// Only enable registration if it's enabled in the YAML config
+	if cfg.YAML.Authentication.Register.Enabled {
+		auth.Post("/register", authHandler.Register)
+	}
 
 	// API routes (protected)
 	api := app.Group("/api")
 	api.Use(jwtware.New(jwtware.Config{
-		SigningKey: []byte(cfg.JWTSecret),
+		SigningKey: []byte(cfg.Env.JWTSecret),
 	}))
 
 	// Protected routes
@@ -94,8 +108,8 @@ func main() {
 	})
 
 	// Listen on configured port
-	log.Printf("Starting server on port %s", cfg.AppPort)
-	log.Fatal(app.Listen(":" + cfg.AppPort))
+	log.Printf("Starting server on port %s", cfg.Env.AppPort)
+	log.Fatal(app.Listen(":" + cfg.Env.AppPort))
 }
 
 // createAdminUser creates an admin user if it doesn't exist
