@@ -1,0 +1,7 @@
+# Authentication Settings
+#
+authentication:
+  # Register settings
+  #
+  register:
+    enabled: true
